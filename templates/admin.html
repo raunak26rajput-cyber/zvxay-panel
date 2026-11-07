@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel · ZVXAY{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Home</a>
+    <div>
+      <h1 class="page-title">Admin Panel</h1>
+      <p class="page-subtitle">Manage users, approve bots, configure settings</p>
+    </div>
+  </div>
+  <span class="badge badge-running">Owner</span>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar" style="margin-bottom:20px">
+  <div class="stat-card stat-cyan">
+    <div class="stat-value">{{ users|length }}</div>
+    <div class="stat-label">Total Users</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-value">{{ users|selectattr('approved')|list|length }}</div>
+    <div class="stat-label">Approved</div>
+  </div>
+  <div class="stat-card stat-orange">
+    <div class="stat-value">{{ pending_bots|length }}</div>
+    <div class="stat-label">Pending Bots</div>
+  </div>
+  <div class="stat-card stat-green">
+    <div class="stat-value">{{ all_bots|selectattr('status','equalto','running')|list|length }}</div>
+    <div class="stat-label">Running</div>
+  </div>
+</div>
+
+<div class="stack-lg">
+
+  <!-- Settings row -->
+  <div class="admin-grid">
+    <div class="card">
+      <div class="section-title"><span class="accent">🔗</span> Contact Owner Link</div>
+      <form method="post" action="{{ url_for('admin_set_contact_link') }}" class="row" style="gap:8px;flex-wrap:wrap">
+        <input name="contact_link" placeholder="https://t.me/yourlink" value="{{ contact_link or '' }}" class="flex-1" style="min-width:170px" />
+        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><span class="accent">➕</span> Create User</div>
+      <form method="post" action="{{ url_for('admin_create_user') }}" class="stack">
+        <div class="form-row">
+          <div>
+            <span class="form-label">Username</span>
+            <input name="username" placeholder="username" required />
+          </div>
+          <div>
+            <span class="form-label">Password</span>
+            <input name="password" placeholder="password" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <span class="form-label">Expiry (optional)</span>
+            <input name="expiry" type="date" />
+          </div>
+          <div style="align-self:flex-end;padding-bottom:2px">
+            <label class="toggle">
+              <input type="checkbox" name="approved" />
+              <span class="text-sm">Auto-approve</span>
+            </label>
+          </div>
+        </div>
+        <button class="btn btn-success btn-sm" type="submit">Create User</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Pending bots -->
+  {% if pending_bots %}
+    <div class="card card-warn">
+      <div class="section-title"><span class="accent">⏳</span> Pending Bot Requests <span style="color:var(--orange)">({{ pending_bots|length }})</span></div>
+      <div class="table-wrap">
+        <table class="table table-mobile-cards">
+          <thead>
+            <tr><th>User</th><th>File</th><th>UID</th><th>Uploaded</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for b in pending_bots %}
+              <tr>
+                <td data-label="User">{{ b.owner.username }}</td>
+                <td data-label="File" class="mono">{{ b.filename }}</td>
+                <td data-label="UID"><span class="uid-chip" style="font-size:10px">{{ b.uid }}</span></td>
+                <td data-label="Uploaded" class="mono">{{ b.created_at.strftime('%Y-%m-%d %H:%M') if b.created_at else '-' }}</td>
+                <td data-label="Actions">
+                  <div class="row gap-sm" style="flex-wrap:wrap">
+                    <form method="post" action="{{ url_for('approve_bot', bot_id=b.id) }}">
+                      <button class="btn btn-success btn-xs">✓ Approve</button>
+                    </form>
+                    <form method="post" action="{{ url_for('reject_bot', bot_id=b.id) }}">
+                      <button class="btn btn-danger btn-xs">✗ Reject</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Users table -->
+  <div class="card">
+    <div class="section-title"><span class="accent">👥</span> All Users <span class="text-xs muted" style="-webkit-text-fill-color:var(--text-muted)">({{ users|length }})</span></div>
+    <div class="table-wrap">
+      <table class="table table-mobile-cards">
+        <thead>
+          <tr><th>ID</th><th>Username</th><th>Role</th><th>Status</th><th>Expiry</th><th>Created</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr>
+              <td data-label="ID" class="mono">{{ u.id }}</td>
+              <td data-label="Username"><strong>{{ u.username }}</strong></td>
+              <td data-label="Role">
+                {% if u.role == 'owner' %}
+                  <span class="badge" style="background:var(--cyan-dim);color:var(--cyan);border-color:rgba(0,212,255,.2)">Owner</span>
+                {% else %}
+                  <span class="badge badge-stopped">User</span>
+                {% endif %}
+              </td>
+              <td data-label="Status">
+                {% if u.approved %}
+                  <span class="badge badge-running">Approved</span>
+                {% else %}
+                  <span class="badge badge-rejected">Pending</span>
+                {% endif %}
+              </td>
+              <td data-label="Expiry" class="mono">{{ u.expiry if u.expiry else '—' }}</td>
+              <td data-label="Created" class="mono">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}</td>
+              <td data-label="Actions">
+                {% if u.username != 'VANSHRAZPUT' %}
+                  <form method="post" action="{{ url_for('admin_set_user_status', user_id=u.id) }}" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                    <select name="action" style="width:auto;padding:5px 8px;font-size:12px">
+                      <option value="approve">Approve</option>
+                      <option value="deny">Deny</option>
+                      <option value="delete">Delete</option>
+                    </select>
+                    <input name="expiry" type="date" style="width:130px;padding:5px 8px;font-size:12px" />
+                    <button class="btn btn-outline-cyan btn-xs">Apply</button>
+                  </form>
+                {% else %}
+                  <span class="muted text-xs">Protected</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- All bots -->
+  <div class="card">
+    <div class="section-title"><span class="accent">🤖</span> All Bots <span class="text-xs muted" style="-webkit-text-fill-color:var(--text-muted)">({{ all_bots|length }})</span></div>
+    <div class="table-wrap">
+      <table class="table table-mobile-cards">
+        <thead>
+          <tr><th>UID</th><th>Owner</th><th>File</th><th>Status</th><th>PID</th><th>Restarts</th><th>Uptime</th></tr>
+        </thead>
+        <tbody>
+          {% for b in all_bots %}
+            <tr>
+              <td data-label="UID"><span class="uid-chip" style="font-size:10px">{{ b.uid }}</span></td>
+              <td data-label="Owner">{{ b.owner.username }}</td>
+              <td data-label="File" class="mono">{{ b.main_file or b.filename }}</td>
+              <td data-label="Status">
+                {% if b.status == 'running' %}<span class="badge badge-running">Running</span>
+                {% elif b.status == 'pending' %}<span class="badge badge-pending">Pending</span>
+                {% elif b.status == 'rejected' %}<span class="badge badge-rejected">Rejected</span>
+                {% elif b.status == 'setup' %}<span class="badge badge-setup">Setup</span>
+                {% else %}<span class="badge badge-stopped">Stopped</span>{% endif %}
+              </td>
+              <td data-label="PID" class="mono">{{ b.pid or '—' }}</td>
+              <td data-label="Restarts" class="mono">{{ b.restart_count or 0 }}</td>
+              <td data-label="Uptime" class="mono" style="color:var(--green)">{{ b.uptime_str() }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
